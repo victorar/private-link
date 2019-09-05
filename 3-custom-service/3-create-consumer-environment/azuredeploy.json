@@ -1,0 +1,200 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "projectName": {
+        "type": "string",
+        "defaultValue": "plconsumer",        
+        "metadata": {
+          "description": "Specifies a project name that is used for generating resource names."
+        }
+      },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Username for the Virtual Machine."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password for the Virtual Machine."
+            }
+        },        
+        "windowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "2016-Nano-Server",
+                "2016-Datacenter-with-Containers",
+                "2016-Datacenter",
+                "2019-Datacenter"
+            ],
+            "metadata": {
+                "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+            }
+        }
+    },
+    "variables": {        
+        "nicName": "[concat(parameters('projectName'),'-nic')]",
+        "addressPrefix": "10.0.0.0/16",
+        "appSubnetName": "appSubnet",
+        "firewallSubnetName": "AzureFirewallSubnet",
+        "bastionSubnetName": "AzureBastionSubnet",
+        "appSubnetPrefix": "10.0.0.0/24",
+        "firewallSubnetPrefix": "10.0.1.0/24",                
+        "bastionSubnetPrefix": "10.0.2.0/24",
+        "bastionName": "[concat(parameters('projectName'),'-bastion')]",
+        "bastionPublicIPAddressName": "[concat(parameters('projectName'),'-bastion-pip')]",
+        "bastionSubnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('bastionSubnetName'))]",
+        "vmName": "[concat(parameters('projectName'),'-vm')]",
+        "virtualNetworkName": "[concat(parameters('projectName'),'-vnet')]",
+        "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('appSubnetName'))]",
+        "vmSize": "Standard_DS1_v2",
+        "vmStorageAccountType": "Premium_LRS"
+    },
+    "resources": [      
+      {
+        "type": "Microsoft.Network/publicIPAddresses",
+        "apiVersion": "2019-02-01",
+        "name": "[variables('bastionPublicIPAddressName')]",
+        "location": "[resourcegroup().location]",
+        "sku": {
+          "name":"Standard"
+        },
+        "properties": {
+          "publicIPAllocationMethod":"Static"          
+        }
+      },
+      {
+        "type": "Microsoft.Network/virtualNetworks",
+        "apiVersion": "2018-12-01",
+        "name": "[variables('virtualNetworkName')]",
+        "location": "[resourcegroup().location]",
+        "properties": {
+          "addressSpace": {
+            "addressPrefixes": [
+              "[variables('addressPrefix')]"
+            ]
+          },
+          "subnets": [
+            {
+              "name": "[variables('appSubnetName')]",
+              "properties": {
+                "addressPrefix": "[variables('appSubnetPrefix')]",
+                "privateLinkServiceNetworkPolicies": "Disabled",
+                "privateEndpointNetworkPolicies": "Disabled"
+              }
+            },
+            {
+              "name": "[variables('firewallSubnetName')]",
+              "properties": {
+                "addressPrefix": "[variables('firewallSubnetPrefix')]"
+              }
+            },
+            {
+              "name": "[variables('bastionSubnetName')]",
+              "properties": {
+                "addressPrefix": "[variables('bastionSubnetPrefix')]"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "apiVersion": "2018-10-01",
+        "type": "Microsoft.Network/bastionHosts",
+        "name": "[variables('bastionName')]",
+        "location": "[resourceGroup().location]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/publicIpAddresses/', variables('bastionPublicIPAddressName'))]"          
+        ],
+        "properties":{
+          "ipConfigurations":[
+            {
+              "name": "IpConfig",
+              "properties":{
+                "subnet":{
+                  "id": "[variables('bastionSubnetRef')]"
+                },
+                "publicIPAddress":{
+                  "id": "[resourceId('Microsoft.Network/publicIpAddresses/', variables('bastionPublicIPAddressName'))]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "2018-12-01",
+        "name": "[variables('nicName')]",
+        "location": "[resourcegroup().location]",
+        "dependsOn": [          
+          "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]"
+        ],
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "privateIPAllocationMethod": "Dynamic",                
+                "subnet": {
+                  "id": "[variables('subnetRef')]"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines",
+        "apiVersion": "2018-10-01",
+        "name": "[variables('vmName')]",
+        "location": "[resourcegroup().location]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+        ],
+        "properties": {
+          "hardwareProfile": {
+            "vmSize": "[variables('vmSize')]"
+          },
+          "osProfile": {
+            "computerName": "[variables('vmName')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "adminPassword": "[parameters('adminPassword')]",
+            "windowsConfiguration": {
+              "enableAutomaticUpdates": true,
+              "provisionVmAgent": true
+            }
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServer",
+              "sku": "[parameters('windowsOSVersion')]",
+              "version": "latest"
+            },
+            "osDisk": {
+              "createOption": "FromImage",
+              "managedDisk": {
+                "storageAccountType": "[variables('vmStorageAccountType')]"
+              }
+            }            
+          },
+          "networkProfile": {
+            "networkInterfaces": [
+              {
+                "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+              }
+            ]
+          }          
+        }
+      }
+    ],
+    "outputs": {      
+    }
+}
