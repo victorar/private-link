@@ -39,14 +39,14 @@
     },
     "resources": [
         {
-            "apiVersion": "2019-02-01",
+            "apiVersion": "2019-06-01",
             "type": "Microsoft.Network/privateEndpoints",
             "name": "[parameters('privateEndpointName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "manualPrivateLinkServiceConnections": [
+                "privateLinkServiceConnections": [
                     {
-                        "name": "{plsConnection}",
+                        "name": "{plsConnectionAutoApproval}",
                         "properties": {
                             "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
                             "requestMessage": "[parameters('privateLinkConnectionMessage')]"                            

@@ -38,7 +38,7 @@
     },
     "resources": [
         {
-            "apiVersion": "2019-02-01",
+            "apiVersion": "2019-06-01",
             "type": "Microsoft.Network/privateLinkServices",
             "name": "[parameters('privateLinkServiceName')]",
             "location": "[resourceGroup().location]",
@@ -50,7 +50,8 @@
                             "privateIPAllocationMethod": "Dynamic",
                             "subnet": {
                                 "id": "[variables('privateLinkSubnetRef')]"
-                            }
+                            },
+                            "privateIPAddressVersion": "IPv4"
                         }
                     }
                 ],

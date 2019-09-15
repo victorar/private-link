@@ -1,0 +1,62 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "privateEndpointName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Private Endpoint to be created"
+            }
+        },
+        "privateLinkServiceId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Private Link Service ID to connect to. It has to be in the following format: /subscriptions/<subid>/resourceGroups/<rgname>/providers/Microsoft.Network/privateLinkServices/<privatelinkservicename>"
+            }
+        },
+        "privateLinkConnectionMessage": {
+            "type": "string",
+            "defaultValue": "Please approve my connection, thanks!",
+            "metadata": {
+                "description": "Text to include when sending a request to connect to a Private Link service"
+            }
+        },
+        "virtualNetworkName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the Virtual Network where the Private Link EndPoint will be created"
+            }
+        },
+        "subnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the subnet where the Private Link EndPoint will be created"
+            }
+        }
+    },
+    "variables": {
+        "privateEndpointSubnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2019-06-01",
+            "type": "Microsoft.Network/privateEndpoints",
+            "name": "[parameters('privateEndpointName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "manualPrivateLinkServiceConnections": [
+                    {
+                        "name": "{plsConnectionManualApproval}",
+                        "properties": {
+                            "privateLinkServiceId": "[parameters('privateLinkServiceId')]",
+                            "requestMessage": "[parameters('privateLinkConnectionMessage')]"                            
+                        }
+                    }
+                ],
+                "subnet": {
+                    "id": "[variables('privateEndpointSubnetRef')]"
+                }                
+            }
+        }
+    ]
+}

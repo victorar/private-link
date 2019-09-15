@@ -3,7 +3,7 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "privateEndpointName": {
-            "value": "pvtEndpointToInternalWebApp"
+            "value": "pvtEndpointToInternalWebApp-autoapproval"
         },
         "privateLinkServiceId": {
             "value": "/subscriptions/<subid>/resourceGroups/<resourcegroupname>/providers/Microsoft.Network/privateLinkServices/<privatelinkservicename>"
