@@ -1,0 +1,236 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "projectName": {
+            "type": "string",
+            "defaultValue": "plconsumer",
+            "metadata": {
+                "description": "Specifies a project name that is used for generating resource names."
+            }
+        },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Username for the Virtual Machine."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password for the Virtual Machine."
+            }
+        },
+        "addressPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "VNet Address prefix"
+            }
+        },
+        "subnetAddressPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Subnet address prefix"
+            }
+        },
+        "remoteAddressPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "Remote VNet Address prefix"
+            }
+        },
+        "nvaPrivateIP": {
+            "type": "string",
+            "metadata": {
+                "description": "Private IP address space of NVA"
+            }
+        },
+        "windowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "2016-Nano-Server",
+                "2016-Datacenter-with-Containers",
+                "2016-Datacenter",
+                "2019-Datacenter"
+            ],
+            "metadata": {
+                "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+            }
+        }
+    },
+    "variables": {
+        "nicName": "[concat(parameters('projectName'),'-nic')]",
+        "nsgName": "[concat(parameters('projectName'),'-nsg')]",
+        "routeTableName": "[concat(parameters('projectName'),'-udr')]",
+        "subnetName": "subnet-1",
+        "vmName": "[concat(parameters('projectName'),'-vm1')]",
+        "virtualNetworkName": "[concat(parameters('projectName'),'-vnet')]",
+        "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('subnetName'))]",
+        "vmSize": "Standard_DS1_v2",
+        "vmStorageAccountType": "Premium_LRS"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('nsgName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "DenyInternetInbound",
+                        "properties": {
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "Internet",
+                            "destinationAddressPrefix": "[parameters('subnetAddressPrefix')]",
+                            "access": "Deny",
+                            "priority": 1000,
+                            "direction": "Inbound"
+                        }
+                    },
+                    {
+                        "name": "DenyInternetOutbound",
+                        "properties": {
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "[parameters('subnetAddressPrefix')]",
+                            "destinationAddressPrefix": "Internet",
+                            "access": "Deny",
+                            "priority": 1000,
+                            "direction": "Outbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/routeTables",
+            "name": "[variables('routeTableName')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "routes": [
+                    {
+                        "name": "spoke-to-spoke",
+                        "properties": {
+                            "addressPrefix": "[parameters('remoteAddressPrefix')]",
+                            "nextHopType": "VirtualAppliance",
+                            "nextHopIpAddress": "[parameters('nvaPrivateIP')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('virtualNetworkName')]",
+            "location": "[resourcegroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Network/routeTables/', variables('routeTableName'))]",
+                "[concat('Microsoft.Network/networkSecurityGroups/', variables('nsgname'))]"
+            ],
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[parameters('addressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[parameters('subnetAddressPrefix')]",
+                            "networkSecurityGroup":{
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgname'))]"
+                            },
+                            "routeTable":{
+                                "id": "[resourceId('Microsoft.Network/routeTables', variables('routeTableName'))]"
+                            },
+                            "privateLinkServiceNetworkPolicies": "Disabled",
+                            "privateEndpointNetworkPolicies": "Disabled"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('nicName')]",
+            "location": "[resourcegroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('nsgName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            }
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2018-10-01",
+            "name": "[variables('vmName')]",
+            "location": "[resourcegroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('vmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "windowsConfiguration": {
+                        "enableAutomaticUpdates": true,
+                        "provisionVmAgent": true
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[parameters('windowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "[variables('vmStorageAccountType')]"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}

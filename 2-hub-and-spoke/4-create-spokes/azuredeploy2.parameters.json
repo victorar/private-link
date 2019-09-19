@@ -1,0 +1,27 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {        
+        "projectName": {
+            "value": "plspk2"
+        },
+        "adminUsername": {
+            "value": "pladmin"
+        },
+        "adminPassword": {
+            "value": ""
+        },
+        "addressPrefix": {
+            "value": "10.2.0.0/16"
+        },
+        "subnetAddressPrefix": {
+            "value": "10.2.0.0/24"
+        },
+        "remoteAddressPrefix": {
+            "value": "10.1.0.0/16"
+        },
+        "nvaPrivateIP": {
+            "value": "10.0.1.4"
+        }        
+    }
+}

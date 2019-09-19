@@ -1,0 +1,289 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "projectName": {
+            "type": "string",
+            "defaultValue": "plconsumer",
+            "metadata": {
+                "description": "Specifies a project name that is used for generating resource names."
+            }
+        },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Username for the Virtual Machine."
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password for the Virtual Machine."
+            }
+        },
+        "windowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "2016-Nano-Server",
+                "2016-Datacenter-with-Containers",
+                "2016-Datacenter",
+                "2019-Datacenter"
+            ],
+            "metadata": {
+                "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+            }
+        }
+    },
+    "variables": {
+        "nicName": "[concat(parameters('projectName'),'-nic')]",
+        "nsgName": "[concat(parameters('projectName'),'-nsg')]",
+        "firewallName": "[concat(parameters('projectName'),'-firewall')]",
+        "addressPrefix": "10.0.0.0/16",
+        "spoke1AddressPrefix": "10.1.0.0/16",
+        "spoke2AddressPrefix": "10.2.0.0/16",
+        "sharedServicesSubnetName": "sharedServicesSubnet",
+        "firewallSubnetName": "AzureFirewallSubnet",
+        "jumpboxSubnetName": "jumpboxSubnet",
+        "sharedServicesSubnetPrefix": "10.0.0.0/24",
+        "firewallSubnetPrefix": "10.0.1.0/24",
+        "jumpboxSubnetPrefix": "10.0.2.0/24",
+        "jumpboxPublicIPAddressName": "[concat(parameters('projectName'),'-jmp-pip')]",
+        "firewallPublicIPAddressName": "[concat(parameters('projectName'),'-firewall-pip')]",
+        "vmName": "[concat(parameters('projectName'),'-jmp')]",
+        "virtualNetworkName": "[concat(parameters('projectName'),'-vnet')]",
+        "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('jumpboxSubnetName'))]",
+        "firewallSubnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('firewallSubnetName'))]",
+        "vmSize": "Standard_DS1_v2",
+        "vmStorageAccountType": "Premium_LRS"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2019-04-01",
+            "name": "[variables('jumpboxPublicIPAddressName')]",
+            "location": "[resourcegroup().location]",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2019-04-01",
+            "name": "[variables('firewallPublicIPAddressName')]",
+            "location": "[resourcegroup().location]",
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('nsgName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "AllowRDPInbound",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3389",
+                            "sourceAddressPrefix": "Internet",
+                            "destinationAddressPrefix": "[variables('jumpboxSubnetPrefix')]",
+                            "access": "Allow",
+                            "priority": 1000,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('virtualNetworkName')]",
+            "location": "[resourcegroup().location]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('addressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('sharedServicesSubnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('sharedServicesSubnetPrefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('firewallSubnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('firewallSubnetPrefix')]"
+                        }
+                    },
+                    {
+                        "name": "[variables('jumpboxSubnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('jumpboxSubnetPrefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2018-12-01",
+            "name": "[variables('nicName')]",
+            "location": "[resourcegroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks/', variables('virtualNetworkName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups/', variables('nsgName'))]",
+                "[resourceId('Microsoft.Network/publicIpAddresses/', variables('jumpboxPublicIPAddressName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            },
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIpAddresses/', variables('jumpboxPublicIPAddressName'))]"
+                            }
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2018-10-01",
+            "name": "[variables('vmName')]",
+            "location": "[resourcegroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces/', variables('nicName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('vmName')]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "windowsConfiguration": {
+                        "enableAutomaticUpdates": true,
+                        "provisionVmAgent": true
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "[parameters('windowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage",
+                        "managedDisk": {
+                            "storageAccountType": "[variables('vmStorageAccountType')]"
+                        }
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',variables('nicName'))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "apiVersion": "2019-04-01",
+            "type": "Microsoft.Network/azureFirewalls",
+            "name": "[variables('firewallName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
+                "[resourceId('Microsoft.Network/publicIpAddresses/', variables('firewallPublicIPAddressName'))]"
+            ],
+            "properties": {
+                "ipConfigurations":[
+                  {
+                    "name": "azureFirewallIpConfigurations",
+                    "properties":{
+                      "subnet":{
+                        "id": "[variables('firewallSubnetRef')]"
+                      },
+                      "publicIPAddress":{
+                        "id": "[resourceId('Microsoft.Network/publicIpAddresses/', variables('firewallPublicIPAddressName'))]"
+                      }
+                    }
+                  }
+                ],
+                "applicationRuleCollections": [],
+                "networkRuleCollections": [
+                    {
+                        "name": "spoke-to-spoke-rule",
+                        "properties": {
+                            "priority": 100,
+                            "action": {
+                                "type": "Allow"
+                            },
+                            "rules": [
+                                {
+                                    "name": "spoke1-to-spoke2",
+                                    "protocols": [
+                                        "Any"
+                                    ],
+                                    "sourceAddresses": [
+                                        "[variables('spoke1AddressPrefix')]"
+                                    ],
+                                    "destinationAddresses": [
+                                        "[variables('spoke2AddressPrefix')]"
+                                    ],
+                                    "destinationPorts": [
+                                        "*"
+                                    ]
+                                },
+                                {
+                                  "name": "spoke2-to-spoke1",
+                                  "protocols": [
+                                      "Any"                                      
+                                  ],
+                                  "sourceAddresses": [
+                                      "[variables('spoke2AddressPrefix')]"
+                                  ],
+                                  "destinationAddresses": [
+                                      "[variables('spoke1AddressPrefix')]"
+                                  ],
+                                  "destinationPorts": [
+                                      "*"
+                                  ]
+                              }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+    "outputs": {}
+}
