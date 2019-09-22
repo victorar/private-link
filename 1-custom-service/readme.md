@@ -13,6 +13,7 @@ To deploy these sample templates with Azure CLI, you can follow these steps (aft
 az login
 az account set --subscription <sub-id>
 ```
+Deploy Provider Environment
 
 1) Deploy a sample Azure hosted web application
 ```bash
@@ -28,6 +29,7 @@ cd 2-create-private-link-service
 az group deployment create --name createPrivateLink --resource-group privateLinkService --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
 cd ..
 ```
+Deploy Consumer Environment (single VNet)
 
 3) Create consumer environment with a single VNet
 ```bash
