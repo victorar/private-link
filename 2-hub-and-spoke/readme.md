@@ -15,7 +15,7 @@ Deploy Provider Environment
 
 1) Deploy a sample Azure hosted web application
 ```bash
-cd 1-create-custom-service
+cd 1-sample-webapp
 az group create --name privateLinkService --location <azureregion>
 az group deployment create --name deployWebApp --resource-group privateLinkService --template-file azuredeploy.json --parameters @azuredeploy.parameters.json
 cd ..
