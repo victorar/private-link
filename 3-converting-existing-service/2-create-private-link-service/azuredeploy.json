@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "privateLinkServiceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the name of the Private Link service to be created"
+            }
+        },
+        "loadBalancerName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location for all of the resources created by this template. Availability zones are only supported in certain regions.  For the last supported zones, see https://docs.microsoft.com/en-us/azure/availability-zones/az-overview#services-support-by-region."
+            }
+        },
+        "loadBalancerFrontEndConfig": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location for all of the resources created by this template. Availability zones are only supported in certain regions.  For the last supported zones, see https://docs.microsoft.com/en-us/azure/availability-zones/az-overview#services-support-by-region."
+            }
+        },
+        "virtualNetworkName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location for all of the resources created by this template. Availability zones are only supported in certain regions.  For the last supported zones, see https://docs.microsoft.com/en-us/azure/availability-zones/az-overview#services-support-by-region."
+            }
+        },
+        "subnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specifies the location for all of the resources created by this template. Availability zones are only supported in certain regions.  For the last supported zones, see https://docs.microsoft.com/en-us/azure/availability-zones/az-overview#services-support-by-region."
+            }
+        }
+    },
+    "variables": {
+        "privateLinkSubnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2019-06-01",
+            "type": "Microsoft.Network/privateLinkServices",
+            "name": "[parameters('privateLinkServiceName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "natNicIpconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('privateLinkSubnetRef')]"
+                            },
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "loadBalancerFrontendIpConfigurations": [
+                    {
+                        "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('loadBalancerName')), '/frontendIpConfigurations/',parameters('loadBalancerFrontEndConfig'))]"
+                    }
+                ]
+            }
+        }
+    ]
+}
